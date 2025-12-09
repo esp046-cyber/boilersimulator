@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#e94560">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/svg+xml" href="icons/icon-192.svg">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+    <title>Boiler Control Simulation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #1a1a2e;
+            --secondary: #16213e;
+            --accent: #e94560;
+            --success: #00d26a;
+            --warning: #ffc107;
+            --danger: #ff4757;
+            --info: #00a8ff;
+            --text: #eee;
+            --text-dim: #888;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .app-container {
+            max-width: 480px;
+            margin: 0 auto;
+            padding: 12px;
+            padding-bottom: 70px;
+        }
+
+        header {
+            text-align: center;
+            padding: 16px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 16px;
+        }
+
+        header h1 {
+            font-size: 1.4rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-top: 8px;
+        }
+
+        .status-running { background: var(--success); color: #000; }
+        .status-standby { background: var(--warning); color: #000; }
+        .status-fault { background: var(--danger); }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 16px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .card-title {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Boiler Visualization */
+        .boiler-viz {
+            position: relative;
+            height: 200px;
+            background: linear-gradient(180deg, #0f0f1a 0%, #1a1a2e 100%);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .boiler-tank {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            width: 120px;
+            height: 140px;
+            background: linear-gradient(90deg, #333 0%, #555 50%, #333 100%);
+            border-radius: 10px 10px 20px 20px;
+            border: 3px solid #666;
+        }
+
+        .water-level {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, #00a8ff 0%, #0066cc 100%);
+            border-radius: 0 0 17px 17px;
+            transition: height 0.5s ease;
+        }
+
+        .steam {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40px;
+            height: 30px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .steam.active {
+            opacity: 1;
+            animation: steam 1s infinite;
+        }
+
+        .steam::before, .steam::after {
+            content: '';
+            position: absolute;
+            background: rgba(255,255,255,0.3);
+            border-radius: 50%;
+            animation: steamBubble 1.5s infinite;
+        }
+
+        .steam::before {
+            width: 15px;
+            height: 15px;
+            left: 5px;
+        }
+
+        .steam::after {
+            width: 12px;
+            height: 12px;
+            right: 5px;
+            animation-delay: 0.5s;
+        }
+
+        @keyframes steamBubble {
+            0% { transform: translateY(0); opacity: 0.6; }
+            100% { transform: translateY(-20px); opacity: 0; }
+        }
+
+        .burner {
+            position: absolute;
+            bottom: -10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80px;
+            height: 25px;
+            background: #444;
+            border-radius: 5px;
+        }
+
+        .flame {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            opacity: 0;
+            transition: all 0.3s;
+        }
+
+        .flame.active {
+            opacity: 1;
+            width: 50px;
+            height: 40px;
+            background: linear-gradient(0deg, #ff4500 0%, #ff8c00 50%, #ffd700 100%);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            animation: flicker 0.15s infinite alternate;
+        }
+
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scale(1) rotate(-2deg); }
+            100% { transform: translateX(-50%) scale(1.05) rotate(2deg); }
+        }
+
+        .pump-indicator {
+            position: absolute;
+            left: 20px;
+            bottom: 30px;
+            text-align: center;
+        }
+
+        .pump-icon {
+            width: 40px;
+            height: 40px;
+            background: #333;
+            border-radius: 50%;
+            border: 2px solid #555;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            transition: all 0.3s;
+        }
+
+        .pump-icon.running {
+            border-color: var(--success);
+            box-shadow: 0 0 15px var(--success);
+            animation: pumpRotate 1s linear infinite;
+        }
+
+        @keyframes pumpRotate {
+            100% { transform: rotate(360deg); }
+        }
+
+        .pump-label {
+            font-size: 0.65rem;
+            margin-top: 4px;
+            color: var(--text-dim);
+        }
+
+        /* Gauges */
+        .gauges-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .gauge {
+            text-align: center;
+            padding: 12px 8px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+        }
+
+        .gauge-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: 'Courier New', monospace;
+        }
+
+        .gauge-unit {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        .gauge-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin-top: 4px;
+        }
+
+        /* Control Buttons */
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .ctrl-btn {
+            padding: 14px;
+            border: none;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .ctrl-btn:active {
+            transform: scale(0.96);
+        }
+
+        .btn-start {
+            background: var(--success);
+            color: #000;
+        }
+
+        .btn-stop {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .btn-pump {
+            background: var(--info);
+            color: #fff;
+        }
+
+        .btn-burner {
+            background: #ff6b35;
+            color: #fff;
+        }
+
+        .btn-disabled {
+            opacity: 0.5;
+            pointer-events: none;
+        }
+
+        /* Ladder Logic Display */
+        .ladder-container {
+            font-family: 'Courier New', monospace;
+            font-size: 0.75rem;
+            background: #0a0a0f;
+            border-radius: 8px;
+            padding: 12px;
+            overflow-x: auto;
+        }
+
+        .ladder-rung {
+            display: flex;
+            align-items: center;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .ladder-rung:last-child {
+            border-bottom: none;
+        }
+
+        .ladder-contact {
+            display: inline-flex;
+            align-items: center;
+            margin-right: 4px;
+        }
+
+        .contact-symbol {
+            color: var(--text-dim);
+        }
+
+        .contact-name {
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin: 0 2px;
+            font-size: 0.65rem;
+        }
+
+        .contact-true {
+            background: var(--success);
+            color: #000;
+        }
+
+        .contact-false {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-dim);
+        }
+
+        .ladder-coil {
+            margin-left: auto;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 0.65rem;
+        }
+
+        .coil-energized {
+            background: var(--success);
+            color: #000;
+        }
+
+        .coil-deenergized {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-dim);
+        }
+
+        /* Permissives */
+        .permissives-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .permissive-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .permissive-name {
+            font-size: 0.8rem;
+        }
+
+        .permissive-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .permissive-ok {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+        }
+
+        .permissive-fail {
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        /* Variables Editor */
+        .var-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .var-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+        }
+
+        .var-label {
+            font-size: 0.8rem;
+        }
+
+        .var-input {
+            width: 80px;
+            padding: 6px 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            background: rgba(0,0,0,0.5);
+            color: var(--text);
+            font-size: 0.85rem;
+            text-align: right;
+        }
+
+        .var-input:focus {
+            outline: none;
+            border-color: var(--info);
+        }
+
+        /* Trend Chart */
+        .trend-canvas {
+            width: 100%;
+            height: 180px;
+            background: #0a0a0f;
+            border-radius: 8px;
+        }
+
+        .trend-legend {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 10px;
+            font-size: 0.7rem;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 3px;
+            border-radius: 2px;
+        }
+
+        /* Bottom Nav */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            display: flex;
+            justify-content: space-around;
+            padding: 10px 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nav-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 0.65rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            padding: 4px 12px;
+        }
+
+        .nav-btn.active {
+            color: var(--accent);
+        }
+
+        .nav-icon {
+            font-size: 1.2rem;
+        }
+
+        .section {
+            display: none;
+        }
+
+        .section.active {
+            display: block;
+        }
+
+        /* Sequence Display */
+        .sequence-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .seq-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            border-left: 3px solid transparent;
+        }
+
+        .seq-step.current {
+            border-left-color: var(--info);
+            background: rgba(0, 168, 255, 0.1);
+        }
+
+        .seq-step.complete {
+            border-left-color: var(--success);
+        }
+
+        .seq-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .seq-step.complete .seq-num {
+            background: var(--success);
+            color: #000;
+        }
+
+        .seq-step.current .seq-num {
+            background: var(--info);
+            color: #fff;
+        }
+
+        .seq-text {
+            font-size: 0.8rem;
+        }
+
+        /* SVG Icons */
+        .icon {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+        }
+
+        .icon-sm {
+            width: 16px;
+            height: 16px;
+        }
+
+        .nav-icon .icon {
+            width: 24px;
+            height: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header>
+            <h1>
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                Boiler Control Sim
+            </h1>
+            <div id="systemStatus" class="status-badge status-standby">STANDBY</div>
+        </header>
+
+        <!-- Main Section -->
+        <section id="sectionMain" class="section active">
+            <div class="card">
+                <div class="boiler-viz">
+                    <div class="boiler-tank">
+                        <div id="waterLevel" class="water-level" style="height: 50%"></div>
+                        <div id="steam" class="steam"></div>
+                    </div>
+                    <div class="burner">
+                        <div id="flame" class="flame"></div>
+                    </div>
+                    <div class="pump-indicator">
+                        <div id="pumpIcon" class="pump-icon">
+                            <svg class="icon" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-9h10v2H7z"/></svg>
+                        </div>
+                        <div class="pump-label">FW PUMP</div>
+                    </div>
+                </div>
+
+                <div class="gauges-row">
+                    <div class="gauge">
+                        <div class="gauge-value" id="tempValue">68</div>
+                        <div class="gauge-unit">°F</div>
+                        <div class="gauge-label">TEMP</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-value" id="pressValue">0</div>
+                        <div class="gauge-unit">PSI</div>
+                        <div class="gauge-label">PRESS</div>
+                    </div>
+                    <div class="gauge">
+                        <div class="gauge-value" id="levelValue">50</div>
+                        <div class="gauge-unit">%</div>
+                        <div class="gauge-label">LEVEL</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3 17v2h6v-2H3zM3 5v2h10V5H3zm10 16v-2h8v-2h-8v-2h-2v6h2zM7 9v2H3v2h4v2h2V9H7zm14 4v-2H11v2h10zm-6-4h2V7h4V5h-4V3h-2v6z"/></svg>
+                    Controls
+                </div>
+                <div class="controls-grid">
+                    <button id="btnStart" class="ctrl-btn btn-start" onclick="startSystem()">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                        START
+                    </button>
+                    <button id="btnStop" class="ctrl-btn btn-stop" onclick="stopSystem()">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+                        STOP
+                    </button>
+                    <button id="btnPump" class="ctrl-btn btn-pump" onclick="togglePump()">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>
+                        PUMP
+                    </button>
+                    <button id="btnBurner" class="ctrl-btn btn-burner" onclick="toggleBurner()">
+                        <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M13.5.67s.74 2.65.74 4.8c0 2.06-1.35 3.73-3.41 3.73-2.07 0-3.63-1.67-3.63-3.73l.03-.36C5.21 7.51 4 10.62 4 14c0 4.42 3.58 8 8 8s8-3.58 8-8C20 8.61 17.41 3.8 13.5.67z"/></svg>
+                        BURNER
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                    Permissives
+                </div>
+                <div class="permissives-list">
+                    <div class="permissive-item">
+                        <span class="permissive-name">Low Water Cutoff</span>
+                        <div id="permLWCO" class="permissive-status permissive-ok"></div>
+                    </div>
+                    <div class="permissive-item">
+                        <span class="permissive-name">High Pressure Limit</span>
+                        <div id="permHPL" class="permissive-status permissive-ok"></div>
+                    </div>
+                    <div class="permissive-item">
+                        <span class="permissive-name">Flame Detected</span>
+                        <div id="permFlame" class="permissive-status permissive-fail"></div>
+                    </div>
+                    <div class="permissive-item">
+                        <span class="permissive-name">Purge Complete</span>
+                        <div id="permPurge" class="permissive-status permissive-fail"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Logic Section -->
+        <section id="sectionLogic" class="section">
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+                    Ladder Logic Display
+                </div>
+                <div class="ladder-container" id="ladderLogic">
+                    <!-- Dynamic ladder rungs -->
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>
+                    Burner Sequence
+                </div>
+                <div class="sequence-steps" id="burnerSequence">
+                    <div class="seq-step" data-step="0">
+                        <div class="seq-num">1</div>
+                        <span class="seq-text">Pre-purge (30s)</span>
+                    </div>
+                    <div class="seq-step" data-step="1">
+                        <div class="seq-num">2</div>
+                        <span class="seq-text">Pilot Ignition</span>
+                    </div>
+                    <div class="seq-step" data-step="2">
+                        <div class="seq-num">3</div>
+                        <span class="seq-text">Pilot Prove (5s)</span>
+                    </div>
+                    <div class="seq-step" data-step="3">
+                        <div class="seq-num">4</div>
+                        <span class="seq-text">Main Flame On</span>
+                    </div>
+                    <div class="seq-step" data-step="4">
+                        <div class="seq-num">5</div>
+                        <span class="seq-text">Running</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Variables Section -->
+        <section id="sectionVars" class="section">
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+                    Setpoints
+                </div>
+                <div class="var-grid">
+                    <div class="var-item">
+                        <span class="var-label">Temperature SP (°F)</span>
+                        <input type="number" class="var-input" id="varTempSP" value="180" min="100" max="250">
+                    </div>
+                    <div class="var-item">
+                        <span class="var-label">Pressure SP (PSI)</span>
+                        <input type="number" class="var-input" id="varPressSP" value="15" min="5" max="30">
+                    </div>
+                    <div class="var-item">
+                        <span class="var-label">Level SP (%)</span>
+                        <input type="number" class="var-input" id="varLevelSP" value="70" min="30" max="90">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+                    PID Tuning
+                </div>
+                <div class="var-grid">
+                    <div class="var-item">
+                        <span class="var-label">Kp (Proportional)</span>
+                        <input type="number" class="var-input" id="varKp" value="2.0" step="0.1" min="0" max="10">
+                    </div>
+                    <div class="var-item">
+                        <span class="var-label">Ki (Integral)</span>
+                        <input type="number" class="var-input" id="varKi" value="0.5" step="0.1" min="0" max="5">
+                    </div>
+                    <div class="var-item">
+                        <span class="var-label">Kd (Derivative)</span>
+                        <input type="number" class="var-input" id="varKd" value="0.1" step="0.1" min="0" max="2">
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                    Limits
+                </div>
+                <div class="var-grid">
+                    <div class="var-item">
+                        <span class="var-label">Low Water Cutoff (%)</span>
+                        <input type="number" class="var-input" id="varLWCO" value="25" min="10" max="40">
+                    </div>
+                    <div class="var-item">
+                        <span class="var-label">High Press Limit (PSI)</span>
+                        <input type="number" class="var-input" id="varHPL" value="20" min="10" max="30">
+                    </div>
+                    <div class="var-item">
+                        <span class="var-label">Purge Time (s)</span>
+                        <input type="number" class="var-input" id="varPurgeTime" value="5" min="1" max="60">
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trend Section -->
+        <section id="sectionTrend" class="section">
+            <div class="card">
+                <div class="card-title">
+                    <svg class="icon icon-sm" viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg>
+                    Process Trend
+                </div>
+                <canvas id="trendChart" class="trend-canvas"></canvas>
+                <div class="trend-legend">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #ff6b6b"></div>
+                        <span>Temp</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4ecdc4"></div>
+                        <span>Press</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #45b7d1"></div>
+                        <span>Level</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" onclick="showSection('Main')">
+            <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg></span>
+            Main
+        </button>
+        <button class="nav-btn" onclick="showSection('Logic')">
+            <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg></span>
+            Logic
+        </button>
+        <button class="nav-btn" onclick="showSection('Vars')">
+            <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58z"/></svg></span>
+            Vars
+        </button>
+        <button class="nav-btn" onclick="showSection('Trend')">
+            <span class="nav-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99z"/></svg></span>
+            Trend
+        </button>
+    </nav>
+
+    <script>
+        // ========== STATE ==========
+        const state = {
+            running: false,
+            pumpRunning: false,
+            burnerOn: false,
+            burnerStep: -1,
+            purgeComplete: false,
+            flameDetected: false,
+            
+            temperature: 68,
+            pressure: 0,
+            level: 50,
+            
+            tempSP: 180,
+            pressSP: 15,
+            levelSP: 70,
+            
+            Kp: 2.0,
+            Ki: 0.5,
+            Kd: 0.1,
+            
+            lwcoLimit: 25,
+            hplLimit: 20,
+            purgeTime: 5,
+            
+            integral: 0,
+            lastError: 0,
+            purgeTimer: 0,
+            stepTimer: 0
+        };
+
+        // Trend data
+        const trendData = {
+            temp: [],
+            press: [],
+            level: [],
+            maxPoints: 60
+        };
+
+        // ========== NAVIGATION ==========
+        function showSection(name) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('section' + name).classList.add('active');
+            event.currentTarget.classList.add('active');
+        }
+
+        // ========== CONTROLS ==========
+        function startSystem() {
+            if (state.running) return;
+            state.running = true;
+            updateStatus();
+        }
+
+        function stopSystem() {
+            state.running = false;
+            state.burnerOn = false;
+            state.burnerStep = -1;
+            state.purgeComplete = false;
+            state.purgeTimer = 0;
+            state.stepTimer = 0;
+            state.flameDetected = false;
+            updateStatus();
+        }
+
+        function togglePump() {
+            if (!state.running) return;
+            state.pumpRunning = !state.pumpRunning;
+            updateUI();
+        }
+
+        function toggleBurner() {
+            if (!state.running) return;
+            if (!state.burnerOn && canStartBurner()) {
+                state.burnerOn = true;
+                state.burnerStep = 0;
+                state.purgeTimer = 0;
+                state.stepTimer = 0;
+            } else {
+                state.burnerOn = false;
+                state.burnerStep = -1;
+                state.flameDetected = false;
+            }
+            updateUI();
+        }
+
+        function canStartBurner() {
+            return state.level > state.lwcoLimit && state.pressure < state.hplLimit;
+        }
+
+        // ========== SIMULATION LOOP ==========
+        function simulate() {
+            if (!state.running) {
+                // Cooling when stopped
+                if (state.temperature > 68) state.temperature -= 0.5;
+                if (state.pressure > 0) state.pressure -= 0.2;
+            } else {
+                // Read setpoints
+                state.tempSP = parseFloat(document.getElementById('varTempSP').value) || 180;
+                state.pressSP = parseFloat(document.getElementById('varPressSP').value) || 15;
+                state.levelSP = parseFloat(document.getElementById('varLevelSP').value) || 70;
+                state.Kp = parseFloat(document.getElementById('varKp').value) || 2.0;
+                state.Ki = parseFloat(document.getElementById('varKi').value) || 0.5;
+                state.Kd = parseFloat(document.getElementById('varKd').value) || 0.1;
+                state.lwcoLimit = parseFloat(document.getElementById('varLWCO').value) || 25;
+                state.hplLimit = parseFloat(document.getElementById('varHPL').value) || 20;
+                state.purgeTime = parseFloat(document.getElementById('varPurgeTime').value) || 5;
+
+                // Level control
+                // Steam consumption reduces level when burner is firing
+                if (state.burnerOn && state.burnerStep >= 4) {
+                    state.level -= 0.12;
+                }
+                // Pump adds water
+                if (state.pumpRunning) {
+                    const levelError = state.levelSP - state.level;
+                    state.level += Math.max(0.05, levelError * 0.03);
+                }
+                state.level = Math.max(0, Math.min(100, state.level));
+
+                // Burner sequence
+                if (state.burnerOn) {
+                    runBurnerSequence();
+                }
+
+                // Temperature/Pressure PID
+                if (state.burnerOn && state.burnerStep >= 4) {
+                    const tempError = state.tempSP - state.temperature;
+                    state.integral += tempError * 0.1;
+                    state.integral = Math.max(-50, Math.min(50, state.integral)); // Anti-windup
+                    const derivative = (tempError - state.lastError) / 0.1;
+                    const output = state.Kp * tempError + state.Ki * state.integral + state.Kd * derivative;
+                    // Burner can only add heat, but modulates output
+                    const heatRate = Math.max(0, Math.min(output * 0.05, 2));
+                    state.temperature += heatRate;
+                    // Natural heat loss
+                    state.temperature -= 0.1;
+                    state.lastError = tempError;
+
+                    // Pressure follows temperature (steam table approximation)
+                    state.pressure = Math.max(0, (state.temperature - 212) * 0.15);
+                } else {
+                    // Cooling when burner off
+                    if (state.temperature > 68) state.temperature -= 0.3;
+                    if (state.pressure > 0) state.pressure -= 0.1;
+                    state.integral = 0;
+                    state.lastError = 0;
+                }
+
+                state.temperature = Math.max(68, Math.min(250, state.temperature));
+                state.pressure = Math.max(0, Math.min(30, state.pressure));
+
+                // Safety checks
+                if (state.level <= state.lwcoLimit) {
+                    state.burnerOn = false;
+                    state.burnerStep = -1;
+                    state.flameDetected = false;
+                }
+                if (state.pressure >= state.hplLimit) {
+                    state.burnerOn = false;
+                    state.burnerStep = -1;
+                    state.flameDetected = false;
+                }
+            }
+
+            updateTrend();
+            updateUI();
+        }
+
+        function runBurnerSequence() {
+            switch (state.burnerStep) {
+                case 0: // Pre-purge
+                    state.purgeTimer += 0.1;
+                    if (state.purgeTimer >= state.purgeTime) {
+                        state.purgeComplete = true;
+                        state.burnerStep = 1;
+                        state.stepTimer = 0;
+                    }
+                    break;
+                case 1: // Pilot ignition
+                    state.stepTimer = (state.stepTimer || 0) + 0.1;
+                    if (state.stepTimer >= 1) {
+                        state.burnerStep = 2;
+                        state.stepTimer = 0;
+                    }
+                    break;
+                case 2: // Pilot prove
+                    state.flameDetected = true;
+                    state.stepTimer = (state.stepTimer || 0) + 0.1;
+                    if (state.stepTimer >= 2) {
+                        state.burnerStep = 3;
+                        state.stepTimer = 0;
+                    }
+                    break;
+                case 3: // Main flame
+                    state.stepTimer = (state.stepTimer || 0) + 0.1;
+                    if (state.stepTimer >= 1) {
+                        state.burnerStep = 4;
+                    }
+                    break;
+            }
+        }
+
+        // ========== UI UPDATES ==========
+        function updateStatus() {
+            const el = document.getElementById('systemStatus');
+            if (!state.running) {
+                el.textContent = 'STANDBY';
+                el.className = 'status-badge status-standby';
+            } else if (state.level <= state.lwcoLimit || state.pressure >= state.hplLimit) {
+                el.textContent = 'FAULT';
+                el.className = 'status-badge status-fault';
+            } else {
+                el.textContent = 'RUNNING';
+                el.className = 'status-badge status-running';
+            }
+        }
+
+        function updateUI() {
+            // Gauges
+            document.getElementById('tempValue').textContent = Math.round(state.temperature);
+            document.getElementById('pressValue').textContent = state.pressure.toFixed(1);
+            document.getElementById('levelValue').textContent = Math.round(state.level);
+
+            // Water level visual
+            document.getElementById('waterLevel').style.height = state.level + '%';
+
+            // Steam
+            const steam = document.getElementById('steam');
+            steam.classList.toggle('active', state.temperature > 212 && state.burnerOn);
+
+            // Flame
+            const flame = document.getElementById('flame');
+            flame.classList.toggle('active', state.burnerOn && state.burnerStep >= 2);
+
+            // Pump
+            const pump = document.getElementById('pumpIcon');
+            pump.classList.toggle('running', state.pumpRunning && state.running);
+
+            // Permissives
+            document.getElementById('permLWCO').className = 'permissive-status ' + 
+                (state.level > state.lwcoLimit ? 'permissive-ok' : 'permissive-fail');
+            document.getElementById('permHPL').className = 'permissive-status ' + 
+                (state.pressure < state.hplLimit ? 'permissive-ok' : 'permissive-fail');
+            document.getElementById('permFlame').className = 'permissive-status ' + 
+                (state.flameDetected ? 'permissive-ok' : 'permissive-fail');
+            document.getElementById('permPurge').className = 'permissive-status ' + 
+                (state.purgeComplete ? 'permissive-ok' : 'permissive-fail');
+
+            // Update burner sequence
+            updateBurnerSequence();
+
+            // Update ladder logic
+            updateLadderLogic();
+
+            updateStatus();
+        }
+
+        function updateBurnerSequence() {
+            const steps = document.querySelectorAll('.seq-step');
+            steps.forEach((step, i) => {
+                step.classList.remove('current', 'complete');
+                if (state.burnerStep >= i + 1) {
+                    step.classList.add('complete');
+                } else if (Math.floor(state.burnerStep) === i) {
+                    step.classList.add('current');
+                }
+            });
+        }
+
+        function updateLadderLogic() {
+            const container = document.getElementById('ladderLogic');
+            const lwcoOk = state.level > state.lwcoLimit;
+            const hplOk = state.pressure < state.hplLimit;
+            
+            container.innerHTML = `
+                <div class="ladder-rung">
+                    <span class="ladder-contact">
+                        <span class="contact-symbol">--[</span>
+                        <span class="contact-name ${state.running ? 'contact-true' : 'contact-false'}">START</span>
+                        <span class="contact-symbol">]--[</span>
+                        <span class="contact-name ${lwcoOk ? 'contact-true' : 'contact-false'}">LWCO</span>
+                        <span class="contact-symbol">]--[</span>
+                        <span class="contact-name ${hplOk ? 'contact-true' : 'contact-false'}">HPL</span>
+                        <span class="contact-symbol">]--</span>
+                    </span>
+                    <span class="ladder-coil ${state.running && lwcoOk && hplOk ? 'coil-energized' : 'coil-deenergized'}">(RUN)</span>
+                </div>
+                <div class="ladder-rung">
+                    <span class="ladder-contact">
+                        <span class="contact-symbol">--[</span>
+                        <span class="contact-name ${state.running ? 'contact-true' : 'contact-false'}">RUN</span>
+                        <span class="contact-symbol">]--[</span>
+                        <span class="contact-name ${state.level < state.levelSP ? 'contact-true' : 'contact-false'}">LVL<SP</span>
+                        <span class="contact-symbol">]--</span>
+                    </span>
+                    <span class="ladder-coil ${state.pumpRunning ? 'coil-energized' : 'coil-deenergized'}">(PUMP)</span>
+                </div>
+                <div class="ladder-rung">
+                    <span class="ladder-contact">
+                        <span class="contact-symbol">--[</span>
+                        <span class="contact-name ${state.running ? 'contact-true' : 'contact-false'}">RUN</span>
+                        <span class="contact-symbol">]--[</span>
+                        <span class="contact-name ${state.purgeComplete ? 'contact-true' : 'contact-false'}">PURGE</span>
+                        <span class="contact-symbol">]--[</span>
+                        <span class="contact-name ${lwcoOk ? 'contact-true' : 'contact-false'}">LWCO</span>
+                        <span class="contact-symbol">]--</span>
+                    </span>
+                    <span class="ladder-coil ${state.burnerOn && state.burnerStep >= 3 ? 'coil-energized' : 'coil-deenergized'}">(BURN)</span>
+                </div>
+                <div class="ladder-rung">
+                    <span class="ladder-contact">
+                        <span class="contact-symbol">--[</span>
+                        <span class="contact-name ${state.burnerOn ? 'contact-true' : 'contact-false'}">BURN</span>
+                        <span class="contact-symbol">]--[</span>
+                        <span class="contact-name ${state.flameDetected ? 'contact-true' : 'contact-false'}">FLAME</span>
+                        <span class="contact-symbol">]--</span>
+                    </span>
+                    <span class="ladder-coil ${state.burnerOn && state.flameDetected ? 'coil-energized' : 'coil-deenergized'}">(FIRE)</span>
+                </div>
+            `;
+        }
+
+        // ========== TREND CHART ==========
+        function updateTrend() {
+            trendData.temp.push(state.temperature);
+            trendData.press.push(state.pressure * 5); // Scale for visibility
+            trendData.level.push(state.level * 2);
+
+            if (trendData.temp.length > trendData.maxPoints) {
+                trendData.temp.shift();
+                trendData.press.shift();
+                trendData.level.shift();
+            }
+
+            drawTrend();
+        }
+
+        function drawTrend() {
+            const canvas = document.getElementById('trendChart');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.offsetWidth * 2;
+            const h = canvas.height = canvas.offsetHeight * 2;
+            ctx.scale(1, 1);
+
+            ctx.fillStyle = '#0a0a0f';
+            ctx.fillRect(0, 0, w, h);
+
+            // Grid
+            ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 5; i++) {
+                const y = (h / 5) * i;
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(w, y);
+                ctx.stroke();
+            }
+
+            const drawLine = (data, color) => {
+                if (data.length < 2) return;
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                data.forEach((val, i) => {
+                    const x = (w / trendData.maxPoints) * i;
+                    const y = h - (val / 250) * h;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+            };
+
+            drawLine(trendData.temp, '#ff6b6b');
+            drawLine(trendData.press, '#4ecdc4');
+            drawLine(trendData.level, '#45b7d1');
+        }
+
+        // ========== INIT ==========
+        setInterval(simulate, 100);
+        updateUI();
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js');
+        }
+    </script>
+</body>
+</html>
